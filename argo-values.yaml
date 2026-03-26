@@ -1,0 +1,64 @@
+crds:
+  install: true
+
+createAggregateRoles: true
+
+singleNamespace: true
+
+controller:
+  clusterWorkflowTemplates:
+    enabled: false
+  workflowNamespaces:
+    - argo
+
+server:
+  authModes:
+    - server
+  clusterWorkflowTemplates:
+    enabled: false
+  serviceType: ClusterIP
+  ingress:
+    enabled: true
+    annotations:
+      kubernetes.io/ingress.class: nginx
+      cert-manager.io/cluster-issuer: cert-manager-webhook-duckdns-production
+    ingressClassName: nginx
+    hosts:
+      - argo-g4e.duckdns.org
+    tls:
+      - hosts:
+          - argo-g4e.duckdns.org
+        secretName: argo-tls
+
+workflow:
+  serviceAccount:
+    create: true
+    name: "argo-workflow"
+
+executor:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+artifactRepositoryRef:
+  artifact-repositories:
+    annotations:
+      workflows.argoproj.io/default-artifact-repository: default-v1-s3
+    data:
+      default-v1-s3: |
+        archiveLogs: true
+        s3:
+          bucket: g4e-desp-argo-artifacts
+          endpoint: s3.gra.io.cloud.ovh.net
+          insecure: false
+          region: gra
+          accessKeySecret:
+            name: argo-s3-credentials
+            key: accessKey
+          secretKeySecret:
+            name: argo-s3-credentials
+            key: secretKey

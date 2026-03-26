@@ -1,0 +1,57 @@
+gateway:
+  auth:
+    type: jupyterhub
+    jupyterhub:
+      apiTokenFromSecretName: hub
+      apiTokenFromSecretKey: hub.services.dask-gateway.apiToken
+  prefix: /services/dask-gateway
+  extraConfig:
+    resource-limits: |
+      c.ClusterConfig.cluster_max_cores = 128
+      c.ClusterConfig.cluster_max_memory = "512 G"
+      c.ClusterConfig.idle_timeout = 3600
+    cluster-options: |
+      from dask_gateway_server.options import Options, Integer, Float, String, Select
+
+      def options_handler(options):
+          return {
+              "worker_cores": options.worker_cores,
+              "worker_memory": "%d G" % options.worker_memory,
+          }
+
+      c.Backend.cluster_options = Options(
+          Integer("worker_cores", default=2, min=1, max=4, label="Worker CPUs"),
+          Integer("worker_memory", default=8, min=4, max=16, label="Worker Memory (GB)"),
+          handler=options_handler,
+      )
+  backend:
+    image:
+      name: quay.io/jeani/g4e-notebook
+      tag: "latest"
+    scheduler:
+      cores:
+        request: 2
+        limit: 4
+      memory:
+        request: "8G"
+        limit: "16G"
+      extraPodConfig:
+        nodeSelector:
+          hub.jupyter.org/node-purpose: user
+    worker:
+      cores:
+        request: 2
+        limit: 4
+      memory:
+        request: "4G"
+        limit: "8G"
+      extraPodConfig:
+        nodeSelector:
+          hub.jupyter.org/node-purpose: user
+
+traefik:
+  image:
+    name: traefik
+    tag: "3.3.5"
+  service:
+    type: LoadBalancer
