@@ -1,16 +1,12 @@
 crds:
   install: true
-
 createAggregateRoles: true
-
 singleNamespace: true
-
 controller:
   clusterWorkflowTemplates:
     enabled: false
   workflowNamespaces:
     - argo
-
 server:
   authModes:
     - server
@@ -20,21 +16,18 @@ server:
   ingress:
     enabled: true
     annotations:
-      kubernetes.io/ingress.class: nginx
-      cert-manager.io/cluster-issuer: cert-manager-webhook-duckdns-production
-    ingressClassName: nginx
+      cert-manager.io/cluster-issuer: letsencrypt-jupyterhub
+    ingressClassName: nginx-jupyterhub
     hosts:
       - argo-g4e.duckdns.org
     tls:
       - hosts:
           - argo-g4e.duckdns.org
         secretName: argo-tls
-
 workflow:
   serviceAccount:
     create: true
     name: "argo-workflow"
-
 executor:
   resources:
     requests:
@@ -43,7 +36,6 @@ executor:
     limits:
       cpu: 500m
       memory: 512Mi
-
 artifactRepositoryRef:
   artifact-repositories:
     annotations:
