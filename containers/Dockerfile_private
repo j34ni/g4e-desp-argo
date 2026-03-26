@@ -1,0 +1,10 @@
+FROM ghcr.io/eopf-dggs/g4e-notebook:latest
+
+USER root
+RUN --mount=type=secret,id=github_token,mode=0444 \
+    /srv/conda/envs/notebook/bin/pip install \
+        git+https://$(cat /run/secrets/github_token)@github.com/EOPF-DGGS/healpix-analyse.git \
+        git+https://$(cat /run/secrets/github_token)@github.com/EOPF-DGGS/legacy-converters.git \
+        argo-workflows
+
+USER ${NB_USER}

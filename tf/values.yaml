@@ -1,0 +1,71 @@
+hub:
+  extraConfig:
+    00-add-dask-gateway-values: |
+      import os
+      release_namespace = os.environ["POD_NAMESPACE"]
+      if "PROXY_HTTP_SERVICE_HOST" in os.environ:
+          gateway_address = "http://{}:{}/services/dask-gateway/".format(
+              os.environ["PROXY_HTTP_SERVICE_HOST"],
+              os.environ["PROXY_HTTP_SERVICE_PORT"],
+          )
+          print("Setting DASK_GATEWAY__ADDRESS {} from HTTP service".format(gateway_address))
+      else:
+          gateway_address = "http://proxy-public/services/dask-gateway"
+          print("Setting DASK_GATEWAY__ADDRESS {}".format(gateway_address))
+      c.KubeSpawner.environment.setdefault("DASK_GATEWAY__ADDRESS", gateway_address)
+      c.KubeSpawner.environment.setdefault("DASK_GATEWAY__PROXY_ADDRESS", "gateway://traefik-dask-gateway.{}:80".format(release_namespace))
+      c.KubeSpawner.environment.setdefault("DASK_GATEWAY__PUBLIC_ADDRESS", "/services/dask-gateway/")
+      c.KubeSpawner.environment.setdefault("DASK_GATEWAY__AUTH__TYPE", "jupyterhub")
+      service_url = "http://traefik-dask-gateway.{}".format(release_namespace)
+      for service in c.JupyterHub.services:
+          if service["name"] == "dask-gateway":
+              if not service.get("url", None):
+                  print("Adding dask-gateway service URL")
+                  service.setdefault("url", service_url)
+              break
+      else:
+          print("dask-gateway service not found, this should not happen!")
+  services:
+    dask-gateway:
+      display: false
+
+singleuser:
+  startTimeout: 600
+  extraEnv:
+    S3_ACCESS_KEY:
+      valueFrom:
+        secretKeyRef:
+          name: s3-credentials
+          key: accessKey
+    S3_SECRET_KEY:
+      valueFrom:
+        secretKeyRef:
+          name: s3-credentials
+          key: secretKey
+  profileList:
+    - display_name: "✅ Standard (CPU)"
+      description: "Standard CPU environment — 2 to 16 CPUs, 8 to 32 GB RAM"
+      default: true
+      kubespawner_override:
+        cpu_limit: 16
+        cpu_guarantee: 2
+        mem_limit: "32G"
+        mem_guarantee: "8G"
+        node_selector:
+          hub.jupyter.org/node-purpose: user
+          node-role: cpu
+    - display_name: "⚠️  GPU (NVIDIA A10, not available yet)"
+      description: "1x NVIDIA A10 GPU — for heavier processing and HEALPix regriding"
+      kubespawner_override:
+        cpu_limit: 16
+        cpu_guarantee: 4
+        mem_limit: "32G"
+        mem_guarantee: "16G"
+        node_selector:
+          node-role: gpu
+        extra_resource_limits:
+          nvidia.com/gpu: "1"
+        tolerations:
+          - key: nvidia.com/gpu
+            operator: Exists
+            effect: NoSchedule
