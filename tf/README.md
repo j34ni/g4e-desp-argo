@@ -1,168 +1,291 @@
-# Déploiement Grid4Earth DESP-SP-IFREMER
+# Grid4Earth DESP — JupyterHub + Argo Workflows on OVHcloud
 
-## Prérequis
+OpenTofu deployment of JupyterHub, Dask Gateway and Argo Workflows on the GRID4EARTH OVHcloud project (GRA9).
+
+## Stack
+
+- JupyterHub 4.3.2 (Zero-to-JupyterHub)
+- Dask Gateway 2025.4.0
+- Argo Workflows 0.46.2
+- NGINX Ingress Controller
+- cert-manager v1.14.4 + Let's Encrypt
+- OVHcloud MKS (Managed Kubernetes Service, GRA9)
+- State stored in OVH S3 bucket (`g4e-desp-state`)
+
+## Prerequisites
 
 - OpenTofu >= 1.6
-- `openstack` CLI configuré avec les credentials du projet DESP-SP-IFREMER
-- Variables d'environnement OVH API (`OVH_APPLICATION_KEY`, `OVH_APPLICATION_SECRET`, `OVH_CONSUMER_KEY`)
+- `kubectl`
+- `helm`
+- OVH API credentials (`OVH_APPLICATION_KEY`, `OVH_APPLICATION_SECRET`, `OVH_CONSUMER_KEY`)
+- S3 credentials for the GRID4EARTH project (see Step 1)
 
 ---
 
-## Étape 1 — Générer les credentials S3 OVH
+## Step 1 — Retrieve S3 credentials
 
-Les credentials S3 OVH sont des credentials OpenStack EC2 liés à ton compte dans le projet.
+S3 credentials are managed from the OVHcloud Manager:
+
+1. Log in to https://manager.eu.ovhcloud.com with the GRID4EARTH account
+2. Navigate to **Public Cloud → GRID4EARTH → Object Storage → Users**
+3. Select an existing S3 user (or create one) and click **View credentials**
+
+The `access_key` and `secret_key` values are needed for `backend.tfvars` and `secrets/terraform.tfvars`.
+
+---
+
+## Step 2 — Configure OVH API credentials
+
+Create an API token at https://www.ovh.com/auth/api/createToken with GET/POST/PUT/DELETE rights on `/*`.
+
+Save the credentials in `tf/secrets/ovh-creds.sh` (already listed in `.gitignore`):
 
 ```bash
-# Source ton openrc.sh du projet DESP-SP-IFREMER (téléchargeable depuis la console OVH)
-source ~/openrc-desp-sp-ifremer.sh
-
-# Créer les credentials S3
-openstack ec2 credentials create
-
-# Le résultat ressemble à :
-# +------------+------------------------------------------------------------------+
-# | Field      | Value                                                            |
-# +------------+------------------------------------------------------------------+
-# | access     | xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx  <-- c'est ton s3_access_key   |
-# | secret     | yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy  <-- c'est ton s3_secret_key   |
-# | project_id | 08ad49ea89ef4352b77db6908230c763                                 |
-# +------------+------------------------------------------------------------------+
+export OVH_ENDPOINT="ovh-eu"
+export OVH_APPLICATION_KEY="..."
+export OVH_APPLICATION_SECRET="..."
+export OVH_CONSUMER_KEY="..."
 ```
 
-Note les valeurs `access` et `secret` — tu en auras besoin pour `tofu apply`.
+Source before any Tofu operation:
+
+```bash
+source tf/secrets/ovh-creds.sh
+```
 
 ---
 
-## Étape 2 — Initialiser le backend S3
+## Step 3 — Create the S3 state bucket
 
-Le bucket de state (`g4e-desp-state`) doit exister avant `tofu init`.
+The state bucket must exist before running `tofu init`:
 
-**Option A — Créer le bucket manuellement d'abord (recommandé) :**
 ```bash
+AWS_ACCESS_KEY_ID="<s3_access_key>" \
+AWS_SECRET_ACCESS_KEY="<s3_secret_key>" \
 aws s3 mb s3://g4e-desp-state \
   --endpoint-url https://s3.gra.io.cloud.ovh.net \
   --region gra
 ```
 
-**Option B — Commenter le bloc `backend "s3"` dans main.tf, faire un premier `tofu apply`
-pour créer les buckets, puis décommenter et `tofu init -migrate-state`.**
-
 ---
 
-## Étape 3 — Initialiser Tofu
+## Step 4 — Configure secrets
 
-```bash
-tofu init \
-  -backend-config="access_key=<s3_access_key>" \
-  -backend-config="secret_key=<s3_secret_key>"
-```
+Create `tf/backend.tfvars` (not committed):
 
----
-
-## Étape 4 — Appliquer
-
-Via le fichier `secrets/terraform.tfvars` (ne pas committer) :
 ```hcl
-harbor_robot_username = "robot$dest-sp+pull-jupyterhub"
-harbor_robot_token    = "..."
-s3_access_key         = "..."
-s3_secret_key         = "..."
+access_key = "<s3_access_key>"
+secret_key = "<s3_secret_key>"
 ```
 
-```bash
-tofu apply -var-file=secrets/terraform.tfvars
-```
+Create `tf/secrets/terraform.tfvars` (not committed):
 
-### Note : premier déploiement cert-manager
-
-Lors du premier déploiement, cert-manager doit être installé avant que le ClusterIssuer
-puisse être créé. Appliquer en deux étapes :
-
-```bash
-# Étape 1 — installer cert-manager seul
-tofu apply -var-file=secrets/terraform.tfvars -target=helm_release.cert_manager
-
-# Étape 2 — appliquer le reste
-tofu apply -var-file=secrets/terraform.tfvars
+```hcl
+harbor_robot_username = "<robot_username>"
+harbor_robot_token    = "<robot_token>"
+s3_access_key         = "<s3_access_key>"
+s3_secret_key         = "<s3_secret_key>"
 ```
 
 ---
 
-## Architecture déployée
+## Step 5 — Initialize Tofu
+
+```bash
+cd tf
+source secrets/ovh-creds.sh
+
+tofu init \
+  -backend-config=backend.tfvars \
+  -backend-config="endpoint=https://s3.gra.io.cloud.ovh.net" \
+  -backend-config="region=gra" \
+  -backend-config="skip_credentials_validation=true" \
+  -backend-config="skip_requesting_account_id=true" \
+  -backend-config="skip_region_validation=true"
+```
+
+If a previous backend configuration exists, add `-reconfigure`.
+
+---
+
+## Step 6 — Deploy
+
+The deployment must be done in three passes due to a Tofu limitation: the `kubernetes_manifest` resource (cert-manager ClusterIssuer) cannot be planned before the cluster exists.
+
+**Pass 1 — Create the cluster and node pool:**
+
+```bash
+tofu apply \
+  -var-file=secrets/terraform.tfvars \
+  -target=ovh_cloud_project_kube.cluster \
+  -target=ovh_cloud_project_kube_nodepool.cpu_pool
+```
+
+This takes approximately 7–10 minutes.
+
+**Pass 2 — Deploy all Helm releases and Kubernetes resources:**
+
+```bash
+tofu apply \
+  -var-file=secrets/terraform.tfvars \
+  -target=helm_release.cert_manager \
+  -target=helm_release.ingress_nginx \
+  -target=kubernetes_namespace.jupyterhub \
+  -target=kubernetes_namespace.argo \
+  -target=kubernetes_secret.harbor_pull_secret \
+  -target=kubernetes_secret.harbor_pull_secret_argo \
+  -target=kubernetes_secret.argo_s3_credentials \
+  -target=kubernetes_secret.s3_credentials_jupyterhub \
+  -target=helm_release.jupyterhub \
+  -target=helm_release.dask_gateway \
+  -target=helm_release.argo_workflows \
+  -target=kubernetes_network_policy.singleuser_dask \
+  -target=kubernetes_network_policy.singleuser_to_argo
+```
+
+This takes approximately 10–15 minutes (first run pulls the singleuser image, ~5.8 GiB).
+
+**Pass 3 — Deploy the cert-manager ClusterIssuer:**
+
+```bash
+tofu apply \
+  -var-file=secrets/terraform.tfvars \
+  -target=kubernetes_manifest.cluster_issuer
+```
+
+---
+
+## Step 7 — Configure DNS
+
+After Pass 2, retrieve the LoadBalancer external IP:
+
+```bash
+kubectl get svc -n jupyterhub ingress-nginx-controller
+```
+
+Update the following DuckDNS entries to point to the external IP:
+
+- `g4e-desp.duckdns.org` → JupyterHub
+- `argo-g4e.duckdns.org` → Argo Workflows
+
+The TLS certificate will be issued automatically by cert-manager within a few minutes.
+
+---
+
+## Step 8 — Retrieve kubeconfig
+
+The kubeconfig is available from the OVHcloud Manager:
+
+**Public Cloud → GRID4EARTH → Managed Kubernetes Service → g4e-desp-cluster → kubeconfig → Download**
+
+```bash
+export KUBECONFIG=~/.kube/config-desp
+kubectl get pods -n jupyterhub
+kubectl get pods -n argo
+```
+
+---
+
+## Architecture
 
 ```
-Projet OVH DESP-SP-IFREMER (08ad49ea...)
+OVHcloud project: GRID4EARTH (24b43ff90f3044c8923063b0fbb53f26)
 │
-├── K8s Cluster (GRA7) — g4e-desp-cluster
-│   ├── Node pool CPU  : b3-32, autoscale 1-5, label node-role=cpu
-│   └── Node pool GPU  : à provisionner par Serco/ESA (flavor a10-45 ou similaire)
-│                        taint nvidia.com/gpu=true:NoSchedule
+├── MKS Cluster (GRA9) — g4e-desp-cluster
+│   └── Node pool CPU: b3-32, autoscale 1–5
+│       label: hub.jupyter.org/node-purpose=user, node-role=cpu
 │
-├── Namespace jupyterhub
-│   ├── JupyterHub 4.3.2  — https://g4e-desp.duckdns.org
-│   │   ├── Profil CPU standard (✅ opérationnel)
-│   │   └── Profil GPU A10 (🚫 en attente des nœuds GPU Serco/ESA)
+├── Namespace: jupyterhub
+│   ├── JupyterHub 4.3.2     — https://g4e-desp.duckdns.org
+│   │   ├── Profile: Standard CPU (✅ operational)
+│   │   └── Profile: GPU (⚠️  disabled — see GPU section below)
 │   ├── Dask Gateway 2025.4.0
-│   ├── NGINX Ingress (classe nginx-jupyterhub)
-│   └── cert-manager — TLS Let's Encrypt (ClusterIssuer: letsencrypt-jupyterhub)
+│   ├── NGINX Ingress (class: nginx-jupyterhub)
+│   └── cert-manager — Let's Encrypt TLS
 │
-├── Namespace argo
-│   └── Argo Workflows 0.46.2
-│       └── Artifacts → S3 g4e-desp-argo-artifacts
+├── Namespace: argo
+│   └── Argo Workflows 0.46.2 — https://argo-g4e.duckdns.org
+│       └── Artifacts → S3 bucket (TBD — see Argo artifacts section)
 │
-├── Namespace nvidia-device-plugin
-│   └── NVIDIA Device Plugin — à déployer quand les nœuds GPU seront disponibles
-│
-└── Buckets S3 (GRA)
-    ├── g4e-desp-state          (état Tofu)
-    └── g4e-desp-argo-artifacts (artifacts Argo Workflows)
+└── S3 buckets (GRA)
+    ├── g4e-desp-state          (Tofu state)
+    └── <TBD>                   (Argo Workflows artifacts)
 ```
 
 ---
 
-## Harbor — Registry privée
+## Harbor — Private Registry
 
-L'image singleuser JupyterHub est hébergée sur le Harbor OVH :
-`4763110s.eu-west-par.container-registry.ovh.net/dest-sp/g4e_jupyterhub_private`
+The JupyterHub singleuser image is hosted on the OVHcloud Harbor registry:
 
-Le robot account utilisé pour le pull est un **project-level robot** (dans le projet `dest-sp`) :
-- **Username** : `robot$dest-sp+pull-jupyterhub`
-- **Secret** : dans `secrets/terraform.tfvars`
+```
+y74y55mn.gra7.container-registry.ovh.net/healpix-private/g4e-jupyterhub-private:latest
+```
 
-Le secret Kubernetes correspondant (`harbor-pull-secret`) est créé automatiquement par Tofu
-dans le namespace `jupyterhub`.
+The robot account used for pulling is a project-level robot in the `healpix-private` project.
+Credentials are stored in `secrets/terraform.tfvars` and injected automatically as a Kubernetes
+`imagePullSecret` (`harbor-pull-secret`) in both the `jupyterhub` and `argo` namespaces.
 
-> **Important** : lors du `docker login` en CLI, utiliser des **single quotes** autour du username
-> pour éviter que le `$` soit interprété par le shell :
-> ```bash
-> echo 'TOKEN' | docker login 4763110s.eu-west-par.container-registry.ovh.net \
->   -u 'robot$dest-sp+pull-jupyterhub' \
->   --password-stdin
-> ```
+When using `docker login` from the CLI, use single quotes around the username to prevent shell
+expansion of the `$` character:
+
+```bash
+echo 'TOKEN' | docker login y74y55mn.gra7.container-registry.ovh.net \
+  -u 'robot$healpix-private+<robot-name>' \
+  --password-stdin
+```
 
 ---
 
-## Activer les GPUs (quand Serco/ESA aura provisionné les ressources)
+## GPU support
 
-1. Vérifier que les nœuds GPU apparaissent dans le cluster :
+GRA9 currently offers **Quadro RTX 5000 (16 GB VRAM)** nodes. The GPU profile in JupyterHub
+is present in `values.yaml` but marked as unavailable pending a decision on whether this GPU
+meets project requirements for HEALPix regridding workloads.
+
+When GPU nodes are provisioned:
+
+1. Verify nodes appear in the cluster:
    ```bash
    kubectl get nodes -l node-role=gpu
    ```
 
-2. Vérifier le flavor disponible :
+2. Add the GPU node pool in `main.tf` with the correct `flavor_name`.
+
+3. Deploy the NVIDIA device plugin:
    ```bash
-   openstack flavor list | grep -i a10
+   helm upgrade --install nvidia-device-plugin \
+     https://nvidia.github.io/k8s-device-plugin/stable/nvidia-device-plugin.tgz \
+     -n nvidia-device-plugin --create-namespace \
+     -f nvidia-plugin-values.yaml
    ```
 
-3. Ajouter le node pool GPU dans `main.tf` avec le bon `flavor_name`.
-
-4. Déployer le NVIDIA device plugin (voir `nvidia-plugin-values.yaml`).
-
-5. Mettre à jour le `display_name` du profil GPU dans `values.yaml` (retirer "not available yet").
+4. Update the GPU profile `display_name` in `values.yaml` to remove the "not available yet" warning.
 
 ---
 
-## Exemple de workflow Argo avec GPU
+## Argo Workflows artifacts
+
+Argo is configured to store artifacts and logs in an S3 bucket. The bucket name is defined in
+`argo-values.yaml`. Once the bucket name is confirmed, create it:
+
+```bash
+AWS_ACCESS_KEY_ID="<s3_access_key>" \
+AWS_SECRET_ACCESS_KEY="<s3_secret_key>" \
+aws s3 mb s3://<bucket-name> \
+  --endpoint-url https://s3.gra.io.cloud.ovh.net \
+  --region gra
+```
+
+Then update `argo-values.yaml` accordingly and redeploy:
+
+```bash
+tofu apply -var-file=secrets/terraform.tfvars -target=helm_release.argo_workflows
+```
+
+---
+
+## Example Argo workflow (CPU)
 
 ```yaml
 apiVersion: argoproj.io/v1alpha1
@@ -175,30 +298,15 @@ spec:
   templates:
     - name: regrid
       container:
-        image: 4763110s.eu-west-par.container-registry.ovh.net/dest-sp/g4e_jupyterhub_private:latest
+        image: y74y55mn.gra7.container-registry.ovh.net/healpix-private/g4e-jupyterhub-private:latest
         command: [python, /scripts/regrid_healpix.py]
         resources:
           limits:
-            nvidia.com/gpu: "1"
             memory: "16G"
             cpu: "8"
           requests:
-            nvidia.com/gpu: "1"
-            memory: "16G"
+            memory: "8G"
             cpu: "4"
-      tolerations:
-        - key: nvidia.com/gpu
-          operator: Exists
-          effect: NoSchedule
       nodeSelector:
-        node-role: gpu
+        node-role: cpu
 ```
-
----
-
-## Notes importantes
-
-- Le domaine JupyterHub est `g4e-desp.duckdns.org` — pointe vers `146.59.204.113` (IP du LoadBalancer nginx).
-- Le certificat TLS est géré automatiquement par cert-manager (Let's Encrypt).
-- L'URL Argo dans `argo-values.yaml` est `argo-g4e.duckdns.org` — à créer sur duckdns.org
-  et pointer vers l'IP du LoadBalancer nginx si Argo Workflows doit être exposé.

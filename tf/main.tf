@@ -50,10 +50,10 @@ provider "ovh" {
 }
 
 locals {
-  service_name = "08ad49ea89ef4352b77db6908230c763"
+  service_name = "24b43ff90f3044c8923063b0fbb53f26"
   domain       = "g4e-desp.duckdns.org"
   namespace    = "jupyterhub"
-  region       = "GRA7"
+  region       = "GRA9"
 }
 
 resource "ovh_cloud_project_kube" "cluster" {
@@ -193,7 +193,7 @@ resource "helm_release" "jupyterhub" {
   }
   set {
     name  = "hub.config.GitHubOAuthenticator.allowed_users"
-    value = "{allixender,annefou,benbovy,capetienne,cgueguen,j34ni,fpaulifr,keewis,kmch,luikiris,jmdelouis,pablo-richard,tik65536,tinaok}"
+    value = "{allixender,annefou,benbovy,capetienne,cgueguen,j34ni,fpaulifr,keewis,kmch,luikiris,jmdelouis,pablo-richard,tik65536,tinaok,vinbv}"
   }
   set {
     name  = "ingress.enabled"
@@ -221,7 +221,7 @@ resource "helm_release" "jupyterhub" {
   }
   set {
     name  = "singleuser.image.name"
-    value = "4763110s.eu-west-par.container-registry.ovh.net/dest-sp/g4e_jupyterhub_private"
+    value = "y74y55mn.gra7.container-registry.ovh.net/healpix-private/g4e-jupyterhub-private"
   }
   set {
     name  = "singleuser.image.tag"
@@ -371,7 +371,7 @@ resource "kubernetes_secret" "harbor_pull_secret" {
   data = {
     ".dockerconfigjson" = jsonencode({
       auths = {
-        "4763110s.eu-west-par.container-registry.ovh.net" = {
+        "y74y55mn.gra7.container-registry.ovh.net" = {
           username = var.harbor_robot_username
           password = var.harbor_robot_token
           auth     = base64encode("${var.harbor_robot_username}:${var.harbor_robot_token}")
@@ -393,7 +393,7 @@ resource "kubernetes_secret" "harbor_pull_secret_argo" {
   data = {
     ".dockerconfigjson" = jsonencode({
       auths = {
-        "4763110s.eu-west-par.container-registry.ovh.net" = {
+        "y74y55mn.gra7.container-registry.ovh.net" = {
           username = var.harbor_robot_username
           password = var.harbor_robot_token
           auth     = base64encode("${var.harbor_robot_username}:${var.harbor_robot_token}")
