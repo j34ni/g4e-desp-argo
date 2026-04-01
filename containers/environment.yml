@@ -6,7 +6,3 @@ dependencies:
   - xarray>=2026.2
   - xdggs
   - pip
-  - pip:
-      - git+https://github.com/EOPF-DGGS/healpix-geo.git
-      - git+https://github.com/EOPF-DGGS/healpix-plot.git
-      - git+https://github.com/EOPF-DGGS/healpix-resample.git

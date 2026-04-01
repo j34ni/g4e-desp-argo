@@ -1,0 +1,3 @@
+healpix-geo @ git+https://github.com/EOPF-DGGS/healpix-geo.git@main#subdirectory=python/healpix-geo
+git+https://github.com/EOPF-DGGS/healpix-plot.git
+git+https://github.com/EOPF-DGGS/healpix-resample.git
