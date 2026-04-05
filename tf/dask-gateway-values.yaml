@@ -12,22 +12,22 @@ gateway:
       c.ClusterConfig.idle_timeout = 3600
     cluster-options: |
       from dask_gateway_server.options import Options, Integer, Float, String, Select
-
       def options_handler(options):
           return {
               "worker_cores": options.worker_cores,
               "worker_memory": "%d G" % options.worker_memory,
           }
-
       c.Backend.cluster_options = Options(
-          Integer("worker_cores", default=2, min=1, max=4, label="Worker CPUs"),
-          Integer("worker_memory", default=8, min=4, max=16, label="Worker Memory (GB)"),
+          Integer("worker_cores", default=4, min=1, max=16, label="Worker CPUs"),
+          Integer("worker_memory", default=20, min=8, max=56, label="Worker Memory (GB)"),
           handler=options_handler,
       )
   backend:
     image:
-      name: quay.io/jeani/g4e-notebook
+      name: y74y55mn.gra7.container-registry.ovh.net/healpix-private/g4e-jupyterhub-private
       tag: "latest"
+    imagePullSecrets:
+      - name: harbor-pull-secret
     scheduler:
       cores:
         request: 2
@@ -38,17 +38,18 @@ gateway:
       extraPodConfig:
         nodeSelector:
           hub.jupyter.org/node-purpose: user
+          node-role: cpu
     worker:
       cores:
         request: 2
         limit: 4
       memory:
-        request: "4G"
-        limit: "8G"
+        request: "24G"
+        limit: "48G"
       extraPodConfig:
         nodeSelector:
           hub.jupyter.org/node-purpose: user
-
+          node-role: dask-worker
 traefik:
   image:
     name: traefik

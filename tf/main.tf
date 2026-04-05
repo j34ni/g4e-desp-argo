@@ -88,7 +88,31 @@ resource "ovh_cloud_project_kube_nodepool" "cpu_pool" {
   }
 }
 
+resource "ovh_cloud_project_kube_nodepool" "dask_worker_pool" {
+  service_name  = local.service_name
+  kube_id       = ovh_cloud_project_kube.cluster.id
+  name          = "dask-workers"
+  flavor_name   = "b3-64"
+  desired_nodes = 1
+  min_nodes     = 1
+  max_nodes     = 5
+  autoscale     = true
 
+  template {
+    metadata {
+      annotations = {}
+      finalizers  = []
+      labels = {
+        "hub.jupyter.org/node-purpose" = "user"
+        "node-role"                    = "dask-worker"
+      }
+    }
+    spec {
+      unschedulable = false
+      taints        = []
+    }
+  }
+}
 
 provider "kubernetes" {
   host                   = ovh_cloud_project_kube.cluster.kubeconfig_attributes[0].host
@@ -206,6 +230,21 @@ resource "helm_release" "jupyterhub" {
   set {
     name  = "ingress.annotations.cert-manager\\.io/cluster-issuer"
     value = "letsencrypt-jupyterhub"
+  }
+set {
+    name  = "ingress.annotations.nginx\\.ingress\\.kubernetes\\.io/proxy-body-size"
+    value = "0"
+    type  = "string"
+  }
+  set {
+    name  = "ingress.annotations.nginx\\.ingress\\.kubernetes\\.io/proxy-read-timeout"
+    value = "3600"
+    type  = "string"
+  }
+  set {
+    name  = "ingress.annotations.nginx\\.ingress\\.kubernetes\\.io/proxy-send-timeout"
+    value = "3600"
+    type  = "string"
   }
   set {
     name  = "ingress.hosts[0]"
