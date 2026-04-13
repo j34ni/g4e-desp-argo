@@ -42,7 +42,7 @@ gateway:
     worker:
       cores:
         request: 2
-        limit: 4
+        limit: 16
       memory:
         request: "24G"
         limit: "48G"
