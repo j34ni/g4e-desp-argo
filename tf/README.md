@@ -285,28 +285,12 @@ tofu apply -var-file=secrets/terraform.tfvars -target=helm_release.argo_workflow
 
 ---
 
-## Example Argo workflow (CPU)
+## STAC catalog
 
-```yaml
-apiVersion: argoproj.io/v1alpha1
-kind: Workflow
-metadata:
-  generateName: healpix-regrid-
-  namespace: argo
-spec:
-  entrypoint: regrid
-  templates:
-    - name: regrid
-      container:
-        image: y74y55mn.gra7.container-registry.ovh.net/healpix-private/g4e-jupyterhub-private:latest
-        command: [python, /scripts/regrid_healpix.py]
-        resources:
-          limits:
-            memory: "16G"
-            cpu: "8"
-          requests:
-            memory: "8G"
-            cpu: "4"
-      nodeSelector:
-        node-role: cpu
-```
+Were deployed the folowing subdomains:
+
+- stac-fastapi-geoparquet → https://stac-api-g4e.duckdns.org 
+
+- stac-browser → https://stac-browser-g4e.duckdns.org 
+
+- gridlook → https://gridlook-g4e.duckdns.org
