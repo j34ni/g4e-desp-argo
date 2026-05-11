@@ -51,7 +51,7 @@ provider "ovh" {
 
 locals {
   service_name = "24b43ff90f3044c8923063b0fbb53f26"
-  domain       = "g4e-desp.duckdns.org"
+  domain       = "jupyterhub.grid4earth.eu"
   namespace    = "jupyterhub"
   region       = "GRA9"
 }

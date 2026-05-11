@@ -157,22 +157,52 @@ tofu apply \
 
 ## Step 7 — Configure DNS
 
+The domain `grid4earth.eu` is registered under Tina's OVHcloud account, which is separate from
+the GRID4EARTH infrastructure account (Fred's account, `pf81809-ovh`). The DNS zone is managed
+by OVH nameservers (`ns109.ovh.net` / `dns109.ovh.net`).
+
+A single wildcard A record covers all subdomains:
+
+```
+*.grid4earth.eu  →  <LoadBalancer external IP>  TTL 300
+```
+
 After Pass 2, retrieve the LoadBalancer external IP:
 
 ```bash
 kubectl get svc -n jupyterhub ingress-nginx-controller
 ```
 
-Update the following DuckDNS entries to point to the external IP:
+To add or update the wildcard record, Tina must log in to her OVHcloud account and go to:
+**Web Cloud → Domain names → grid4earth.eu → DNS zone → Add an entry**
 
-- `g4e-desp.duckdns.org` → JupyterHub
-- `argo-g4e.duckdns.org` → Argo Workflows
+| Field | Value |
+|---|---|
+| Type | A |
+| Subdomain | `*` |
+| Target | `<LoadBalancer external IP>` |
+| TTL | 300 |
 
-The TLS certificate will be issued automatically by cert-manager within a few minutes.
+TLS certificates are issued automatically by cert-manager (Let's Encrypt) within a few minutes
+of the DNS record propagating. Monitor with:
+
+```bash
+kubectl get certificate -A --watch
+```
 
 ---
 
-## Step 8 — Retrieve kubeconfig
+## Step 8 — Deploy the STAC stack
+
+After the cluster and DNS are in place, deploy the STAC stack:
+
+```bash
+kubectl apply -f grid4earth-stac-stack.yaml
+```
+
+---
+
+## Step 9 — Retrieve kubeconfig
 
 The kubeconfig is available from the OVHcloud Manager:
 
@@ -196,7 +226,7 @@ OVHcloud project: GRID4EARTH (24b43ff90f3044c8923063b0fbb53f26)
 │       label: hub.jupyter.org/node-purpose=user, node-role=cpu
 │
 ├── Namespace: jupyterhub
-│   ├── JupyterHub 4.3.2     — https://g4e-desp.duckdns.org
+│   ├── JupyterHub 4.3.2     — https://jupyterhub.grid4earth.eu
 │   │   ├── Profile: Standard CPU (✅ operational)
 │   │   └── Profile: GPU (⚠️  disabled — see GPU section below)
 │   ├── Dask Gateway 2025.4.0
@@ -204,8 +234,17 @@ OVHcloud project: GRID4EARTH (24b43ff90f3044c8923063b0fbb53f26)
 │   └── cert-manager — Let's Encrypt TLS
 │
 ├── Namespace: argo
-│   └── Argo Workflows 0.46.2 — https://argo-g4e.duckdns.org
+│   └── Argo Workflows 0.46.2 — https://argo.grid4earth.eu
 │       └── Artifacts → S3 bucket (TBD — see Argo artifacts section)
+│
+├── Namespace: stac
+│   ├── stac-fastapi-geoparquet — https://stac-api.grid4earth.eu
+│   └── stac-browser            — https://stac-browser.grid4earth.eu
+│
+├── Namespace: gridlook
+│   └── gridlook                — https://gridlook.grid4earth.eu
+│       ⚠️  Currently unavailable: image ghcr.io/grid4earth/gridlook:latest
+│           requires authentication (403). Needs a GitHub PAT imagePullSecret.
 │
 └── S3 buckets (GRA)
     ├── g4e-desp-state          (Tofu state)
@@ -287,10 +326,23 @@ tofu apply -var-file=secrets/terraform.tfvars -target=helm_release.argo_workflow
 
 ## STAC catalog
 
-Were deployed the folowing subdomains:
+The following subdomains are deployed via `grid4earth-stac-stack.yaml`:
 
-- stac-fastapi-geoparquet → https://stac-api-g4e.duckdns.org 
+- stac-fastapi-geoparquet → https://stac-api.grid4earth.eu
+- stac-browser → https://stac-browser.grid4earth.eu
+- gridlook → https://gridlook.grid4earth.eu
 
-- stac-browser → https://stac-browser-g4e.duckdns.org 
+> **Note:** gridlook is currently unavailable.
 
-- gridlook → https://gridlook-g4e.duckdns.org
+---
+
+## GitHub OAuth
+
+The JupyterHub GitHub OAuth callback URL is:
+
+```
+https://jupyterhub.grid4earth.eu/hub/oauth_callback
+```
+
+This must match the callback URL configured in the GitHub OAuth App settings
+(github.com → Settings → Developer settings → OAuth Apps).

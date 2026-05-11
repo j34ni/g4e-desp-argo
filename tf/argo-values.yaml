@@ -19,10 +19,10 @@ server:
       cert-manager.io/cluster-issuer: letsencrypt-jupyterhub
     ingressClassName: nginx-jupyterhub
     hosts:
-      - argo-g4e.duckdns.org
+      - argo.grid4earth.eu
     tls:
       - hosts:
-          - argo-g4e.duckdns.org
+          - argo.grid4earth.eu
         secretName: argo-tls
 workflow:
   serviceAccount:
