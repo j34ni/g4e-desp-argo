@@ -180,6 +180,14 @@ resource "helm_release" "ingress_nginx" {
     name  = "controller.ingressClassResource.controllerValue"
     value = "k8s.io/ingress-nginx-jupyterhub"
   }
+  set {
+    name  = "controller.allowSnippetAnnotations"
+    value = "true"
+  }
+  set {
+    name  = "controller.config.annotations-risk-level"
+    value = "Critical"
+  }
 
   depends_on = [kubernetes_namespace.jupyterhub]
 }
