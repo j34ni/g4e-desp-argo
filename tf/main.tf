@@ -500,6 +500,38 @@ resource "kubernetes_manifest" "cluster_issuer" {
   depends_on = [helm_release.cert_manager]
 }
 
+variable "s3proxy_access_key" {
+  type      = string
+  sensitive = true
+}
+
+variable "s3proxy_secret_key" {
+  type      = string
+  sensitive = true
+}
+
+resource "kubernetes_namespace" "s3proxy" {
+  metadata {
+    name = "s3proxy"
+  }
+  lifecycle {
+    ignore_changes = [metadata]
+  }
+  depends_on = [ovh_cloud_project_kube_nodepool.cpu_pool]
+}
+
+resource "kubernetes_secret" "s3proxy_credentials" {
+  metadata {
+    name      = "s3proxy-credentials"
+    namespace = "s3proxy"
+  }
+  data = {
+    AWS_ACCESS_KEY_ID     = var.s3proxy_access_key
+    AWS_SECRET_ACCESS_KEY = var.s3proxy_secret_key
+  }
+  depends_on = [kubernetes_namespace.s3proxy]
+}
+
 output "cluster_id" {
   value = ovh_cloud_project_kube.cluster.id
 }

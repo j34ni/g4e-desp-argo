@@ -1,0 +1,116 @@
+# ============================================================
+# grid4earth S3 proxy — Kubernetes manifests
+# Service: nginx-s3-gateway proxying s3://grid4earth/public/
+# Cluster: OVH GRA9
+# Domain:  https://data.grid4earth.eu
+# ============================================================
+# NOTE: the s3proxy-credentials Secret is managed by Tofu
+# (main.tf — kubernetes_secret.s3proxy_credentials).
+# Apply main.tf before applying this file.
+# ============================================================
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: s3proxy
+  namespace: s3proxy
+  labels:
+    app: s3proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: s3proxy
+  template:
+    metadata:
+      labels:
+        app: s3proxy
+    spec:
+      containers:
+        - name: s3proxy
+          image: nginxinc/nginx-s3-gateway:latest
+          ports:
+            - containerPort: 80
+          env:
+            - name: S3_BUCKET_NAME
+              value: "grid4earth"
+            - name: S3_SERVER
+              value: "s3.gra.perf.cloud.ovh.net"
+            - name: S3_SERVER_PORT
+              value: "443"
+            - name: S3_SERVER_PROTO
+              value: "https"
+            - name: S3_REGION
+              value: "gra"
+            - name: S3_STYLE
+              value: "virtual"
+            - name: S3_PREFIX
+              value: ""
+            - name: ALLOW_DIRECTORY_LIST
+              value: "false"
+            - name: AWS_SIGS_VERSION
+              value: "4"
+          envFrom:
+            - secretRef:
+                name: s3proxy-credentials
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 10
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: s3proxy
+  namespace: s3proxy
+spec:
+  selector:
+    app: s3proxy
+  ports:
+    - port: 80
+      targetPort: 80
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: s3proxy
+  namespace: s3proxy
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-jupyterhub"
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, HEAD, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Range,Content-Type"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /public/$1
+spec:
+  ingressClassName: nginx-jupyterhub
+  tls:
+    - hosts:
+        - data.grid4earth.eu
+      secretName: s3proxy-tls
+  rules:
+    - host: data.grid4earth.eu
+      http:
+        paths:
+          - path: /(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: s3proxy
+                port:
+                  number: 80
