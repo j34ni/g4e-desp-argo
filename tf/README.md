@@ -9,6 +9,7 @@ OpenTofu deployment of JupyterHub, Dask Gateway and Argo Workflows on the GRID4E
 - Argo Workflows 0.46.2
 - NGINX Ingress Controller
 - cert-manager v1.14.4 + Let's Encrypt
+- nginx-s3-gateway (S3 public proxy)
 - OVHcloud MKS (Managed Kubernetes Service, GRA9)
 - State stored in OVH S3 bucket (`g4e-desp-state`)
 
@@ -38,20 +39,27 @@ The `access_key` and `secret_key` values are needed for `backend.tfvars` and `se
 
 Create an API token at https://www.ovh.com/auth/api/createToken with GET/POST/PUT/DELETE rights on `/*`.
 
-Save the credentials in `tf/secrets/ovh-creds.sh` (already listed in `.gitignore`):
+Save the credentials in `secrets/ovh-creds.sh` (encrypted with git-crypt):
 
 ```bash
 export OVH_ENDPOINT="ovh-eu"
 export OVH_APPLICATION_KEY="..."
 export OVH_APPLICATION_SECRET="..."
 export OVH_CONSUMER_KEY="..."
+export AWS_ACCESS_KEY_ID="..."
+export AWS_SECRET_ACCESS_KEY="..."
+export AWS_DEFAULT_REGION="gra"
+export AWS_REGION="gra"
 ```
 
 Source before any Tofu operation:
 
 ```bash
-source tf/secrets/ovh-creds.sh
+git-crypt unlock ~/git-crypt-g4e.key
+source secrets/ovh-creds.sh
 ```
+
+The git-crypt key is stored at `~/git-crypt-g4e.key`. Keep it in a safe place (password manager, USB key) — without it the secrets file cannot be decrypted.
 
 ---
 
@@ -71,21 +79,26 @@ aws s3 mb s3://g4e-desp-state \
 
 ## Step 4 — Configure secrets
 
-Create `tf/backend.tfvars` (not committed):
+Create `backend.tfvars` (not committed):
 
 ```hcl
 access_key = "<s3_access_key>"
 secret_key = "<s3_secret_key>"
 ```
 
-Create `tf/secrets/terraform.tfvars` (not committed):
+Create `secrets/terraform.tfvars` (not committed):
 
 ```hcl
 harbor_robot_username = "<robot_username>"
 harbor_robot_token    = "<robot_token>"
 s3_access_key         = "<s3_access_key>"
 s3_secret_key         = "<s3_secret_key>"
+s3proxy_access_key    = "<s3proxy_access_key>"
+s3proxy_secret_key    = "<s3proxy_secret_key>"
 ```
+
+The `s3proxy_access_key` / `s3proxy_secret_key` are the credentials for the `grid4earth` bucket
+served publicly via `https://data.grid4earth.eu`.
 
 ---
 
@@ -93,24 +106,21 @@ s3_secret_key         = "<s3_secret_key>"
 
 ```bash
 cd tf
+git-crypt unlock ~/git-crypt-g4e.key
 source secrets/ovh-creds.sh
 
-tofu init \
-  -backend-config=backend.tfvars \
-  -backend-config="endpoint=https://s3.gra.io.cloud.ovh.net" \
-  -backend-config="region=gra" \
-  -backend-config="skip_credentials_validation=true" \
-  -backend-config="skip_requesting_account_id=true" \
-  -backend-config="skip_region_validation=true"
+tofu init -reconfigure
 ```
 
-If a previous backend configuration exists, add `-reconfigure`.
+If prompted for backend credentials, make sure `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`
+are set (they come from `secrets/ovh-creds.sh`).
 
 ---
 
 ## Step 6 — Deploy
 
-The deployment must be done in three passes due to a Tofu limitation: the `kubernetes_manifest` resource (cert-manager ClusterIssuer) cannot be planned before the cluster exists.
+The deployment must be done in three passes due to a Tofu limitation: the `kubernetes_manifest`
+resource (cert-manager ClusterIssuer) cannot be planned before the cluster exists.
 
 **Pass 1 — Create the cluster and node pool:**
 
@@ -132,10 +142,12 @@ tofu apply \
   -target=helm_release.ingress_nginx \
   -target=kubernetes_namespace.jupyterhub \
   -target=kubernetes_namespace.argo \
+  -target=kubernetes_namespace.s3proxy \
   -target=kubernetes_secret.harbor_pull_secret \
   -target=kubernetes_secret.harbor_pull_secret_argo \
   -target=kubernetes_secret.argo_s3_credentials \
   -target=kubernetes_secret.s3_credentials_jupyterhub \
+  -target=kubernetes_secret.s3proxy_credentials \
   -target=helm_release.jupyterhub \
   -target=helm_release.dask_gateway \
   -target=helm_release.argo_workflows \
@@ -153,6 +165,19 @@ tofu apply \
   -target=kubernetes_manifest.cluster_issuer
 ```
 
+**Pass 4 — Deploy the STAC stack and S3 proxy:**
+
+```bash
+kubectl apply -f grid4earth-stac-stack.yaml
+kubectl apply -f grid4earth-s3proxy.yaml
+```
+
+Monitor TLS certificate issuance:
+
+```bash
+kubectl get certificate -A --watch
+```
+
 ---
 
 ## Step 7 — Configure DNS
@@ -161,11 +186,14 @@ The domain `grid4earth.eu` is registered under Tina's OVHcloud account, which is
 the GRID4EARTH infrastructure account (Fred's account, `pf81809-ovh`). The DNS zone is managed
 by OVH nameservers (`ns109.ovh.net` / `dns109.ovh.net`).
 
-A single wildcard A record covers all subdomains:
+A single wildcard A record covers all subdomains (already configured — no action needed):
 
 ```
 *.grid4earth.eu  →  <LoadBalancer external IP>  TTL 300
 ```
+
+This wildcard covers all services including `data.grid4earth.eu`. Tina only needs to be contacted
+if the LoadBalancer IP changes.
 
 After Pass 2, retrieve the LoadBalancer external IP:
 
@@ -173,22 +201,8 @@ After Pass 2, retrieve the LoadBalancer external IP:
 kubectl get svc -n jupyterhub ingress-nginx-controller
 ```
 
-To add or update the wildcard record, Tina must log in to her OVHcloud account and go to:
-**Web Cloud → Domain names → grid4earth.eu → DNS zone → Add an entry**
-
-| Field | Value |
-|---|---|
-| Type | A |
-| Subdomain | `*` |
-| Target | `<LoadBalancer external IP>` |
-| TTL | 300 |
-
 TLS certificates are issued automatically by cert-manager (Let's Encrypt) within a few minutes
-of the DNS record propagating. Monitor with:
-
-```bash
-kubectl get certificate -A --watch
-```
+of the DNS record propagating.
 
 ---
 
@@ -212,6 +226,7 @@ The kubeconfig is available from the OVHcloud Manager:
 export KUBECONFIG=~/.kube/config-desp
 kubectl get pods -n jupyterhub
 kubectl get pods -n argo
+kubectl get pods -n s3proxy
 ```
 
 ---
@@ -246,10 +261,44 @@ OVHcloud project: GRID4EARTH (24b43ff90f3044c8923063b0fbb53f26)
 │       ⚠️  Currently unavailable: image ghcr.io/grid4earth/gridlook:latest
 │           requires authentication (403). Needs a GitHub PAT imagePullSecret.
 │
+├── Namespace: s3proxy
+│   └── nginx-s3-gateway        — https://data.grid4earth.eu
+│       Proxies s3://grid4earth/public/ without exposing credentials.
+│       Managed by: grid4earth-s3proxy.yaml (Deployment/Service/Ingress)
+│                   main.tf (Namespace + Secret)
+│       Usage: https://data.grid4earth.eu/<path>
+│              maps to s3://grid4earth/public/<path>
+│
 └── S3 buckets (GRA)
     ├── g4e-desp-state          (Tofu state)
+    ├── grid4earth              (public data via data.grid4earth.eu)
     └── <TBD>                   (Argo Workflows artifacts)
 ```
+
+---
+
+## S3 public proxy
+
+The S3 proxy at `https://data.grid4earth.eu` provides public read-only access to the
+`grid4earth` S3 bucket without exposing credentials. It is backed by
+[nginxinc/nginx-s3-gateway](https://github.com/nginxinc/nginx-s3-gateway).
+
+Files in `s3://grid4earth/public/` are accessible at:
+
+```
+https://data.grid4earth.eu/<path>
+```
+
+Example:
+
+```bash
+curl https://data.grid4earth.eu/tmp/test.zarr/zarr.json
+```
+
+CORS is fully open (`Access-Control-Allow-Origin: *`) with support for `Range` requests,
+which is required for Zarr and cloud-optimised formats.
+
+The proxy replaces the previous `https://data-grid4earth.duckdns.org` endpoint.
 
 ---
 
