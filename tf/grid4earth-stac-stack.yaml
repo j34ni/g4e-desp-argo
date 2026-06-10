@@ -164,7 +164,7 @@ spec:
     spec:
       containers:
         - name: stac-browser
-          image: ghcr.io/radiantearth/stac-browser:latest
+          image: ghcr.io/j34ni/stac-browser:gridlook
           ports:
             - containerPort: 8080
           env:

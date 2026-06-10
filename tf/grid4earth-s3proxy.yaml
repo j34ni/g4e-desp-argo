@@ -8,7 +8,6 @@
 # (main.tf — kubernetes_secret.s3proxy_credentials).
 # Apply main.tf before applying this file.
 # ============================================================
-
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -67,7 +66,6 @@ spec:
               port: 80
             initialDelaySeconds: 10
             periodSeconds: 10
-
 ---
 apiVersion: v1
 kind: Service
@@ -80,7 +78,6 @@ spec:
   ports:
     - port: 80
       targetPort: 80
-
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -91,12 +88,13 @@ metadata:
     cert-manager.io/cluster-issuer: "letsencrypt-jupyterhub"
     nginx.ingress.kubernetes.io/proxy-body-size: "0"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-    nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
-    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, HEAD, OPTIONS"
-    nginx.ingress.kubernetes.io/cors-allow-headers: "Range,Content-Type"
     nginx.ingress.kubernetes.io/use-regex: "true"
     nginx.ingress.kubernetes.io/rewrite-target: /public/$1
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      add_header 'Access-Control-Allow-Origin' '*' always;
+      add_header 'Access-Control-Allow-Methods' 'GET, HEAD, OPTIONS' always;
+      add_header 'Access-Control-Allow-Headers' 'Range,Content-Type' always;
+      add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
 spec:
   ingressClassName: nginx-jupyterhub
   tls:

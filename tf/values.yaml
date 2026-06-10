@@ -28,7 +28,6 @@ hub:
   services:
     dask-gateway:
       display: false
-
 singleuser:
   startTimeout: 600
   extraEnv:
@@ -58,6 +57,18 @@ singleuser:
       description: "Sentinel-2 MSI processor environment with s2msi and Dask"
       kubespawner_override:
         image: y74y55mn.gra7.container-registry.ovh.net/healpix-private/s2msi:1.2.0
+        cpu_limit: 16
+        cpu_guarantee: 2
+        mem_limit: "32G"
+        mem_guarantee: "8G"
+        node_selector:
+          hub.jupyter.org/node-purpose: user
+          node-role: cpu
+        storage_home_mount_path: /home/dask
+    - display_name: "🧪 Sentinel-2 MSI test (do not use)"
+      description: "Test image — for testing only, do not use"
+      kubespawner_override:
+        image: y74y55mn.gra7.container-registry.ovh.net/healpix-private/s2msi:test
         cpu_limit: 16
         cpu_guarantee: 2
         mem_limit: "32G"

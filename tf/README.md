@@ -119,7 +119,7 @@ are set (they come from `secrets/ovh-creds.sh`).
 
 ## Step 6 — Deploy
 
-The deployment must be done in three passes due to a Tofu limitation: the `kubernetes_manifest`
+The deployment must be done in four passes due to a Tofu limitation: the `kubernetes_manifest`
 resource (cert-manager ClusterIssuer) cannot be planned before the cluster exists.
 
 **Pass 1 — Create the cluster and node pool:**
@@ -298,7 +298,28 @@ curl https://data.grid4earth.eu/tmp/test.zarr/zarr.json
 CORS is fully open (`Access-Control-Allow-Origin: *`) with support for `Range` requests,
 which is required for Zarr and cloud-optimised formats.
 
+CORS headers are injected via an nginx `configuration-snippet` on the Ingress (not via the
+`enable-cors` annotations, which only apply to OPTIONS preflight responses). This requires
+two settings in the ingress-nginx Helm release, already configured in `main.tf`:
+
+```hcl
+controller.allowSnippetAnnotations    = true
+controller.config.annotations-risk-level = Critical
+```
+
+> **Note on ingress-nginx >= 1.12:** since chart version 4.12, `allowSnippetAnnotations: true`
+> alone is not sufficient — `annotations-risk-level: Critical` is also required, otherwise the
+> admission webhook rejects `configuration-snippet` annotations.
+
 The proxy replaces the previous `https://data-grid4earth.duckdns.org` endpoint.
+
+### Note on Zarr versions
+
+The proxy serves any file format correctly. However, Gridlook
+(https://gridlook.grid4earth.eu) currently only supports **Zarr v2**
+(metadata files: `.zmetadata`, `.zarray`, `.zattrs`, `.zgroup`).
+Datasets in **Zarr v3** format (`zarr.json`) will not display correctly in Gridlook
+until Gridlook is updated to support Zarr v3.
 
 ---
 
@@ -381,7 +402,7 @@ The following subdomains are deployed via `grid4earth-stac-stack.yaml`:
 - stac-browser → https://stac-browser.grid4earth.eu
 - gridlook → https://gridlook.grid4earth.eu
 
-> **Note:** gridlook is currently unavailable.
+> **Note:** gridlook is currently unavailable (image pull error, needs GitHub PAT imagePullSecret).
 
 ---
 
