@@ -66,7 +66,7 @@ resource "ovh_cloud_project_kube_nodepool" "cpu_pool" {
   service_name  = local.service_name
   kube_id       = ovh_cloud_project_kube.cluster.id
   name          = "cpu-workers"
-  flavor_name   = "b3-32"
+  flavor_name   = "b3-64"
   desired_nodes = 2
   min_nodes     = 1
   max_nodes     = 5
