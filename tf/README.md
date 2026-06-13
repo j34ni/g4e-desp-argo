@@ -192,9 +192,6 @@ A single wildcard A record covers all subdomains (already configured — no acti
 *.grid4earth.eu  →  <LoadBalancer external IP>  TTL 300
 ```
 
-This wildcard covers all services including `data.grid4earth.eu`. Tina only needs to be contacted
-if the LoadBalancer IP changes.
-
 After Pass 2, retrieve the LoadBalancer external IP:
 
 ```bash
@@ -237,12 +234,14 @@ kubectl get pods -n s3proxy
 OVHcloud project: GRID4EARTH (24b43ff90f3044c8923063b0fbb53f26)
 │
 ├── MKS Cluster (GRA9) — g4e-desp-cluster
-│   └── Node pool CPU: b3-32, autoscale 1–5
+│   └── Node pool CPU: b3-64, autoscale 1–5
 │       label: hub.jupyter.org/node-purpose=user, node-role=cpu
 │
 ├── Namespace: jupyterhub
 │   ├── JupyterHub 4.3.2     — https://jupyterhub.grid4earth.eu
-│   │   ├── Profile: Standard CPU (✅ operational)
+│   │   ├── Profile: Standard CPU (✅ operational) — up to 32 GB RAM
+│   │   ├── Profile: Sentinel-2 MSI (✅ operational) — up to 64 GB RAM
+│   │   │   allowed users: pablo-richard, capetienne, cgueguen, j34ni, annefou
 │   │   └── Profile: GPU (⚠️  disabled — see GPU section below)
 │   ├── Dask Gateway 2025.4.0
 │   ├── NGINX Ingress (class: nginx-jupyterhub)
@@ -255,11 +254,10 @@ OVHcloud project: GRID4EARTH (24b43ff90f3044c8923063b0fbb53f26)
 ├── Namespace: stac
 │   ├── stac-fastapi-geoparquet — https://stac-api.grid4earth.eu
 │   └── stac-browser            — https://stac-browser.grid4earth.eu
+│       (custom build: ghcr.io/j34ni/stac-browser:gridlook)
 │
 ├── Namespace: gridlook
 │   └── gridlook                — https://gridlook.grid4earth.eu
-│       ⚠️  Currently unavailable: image ghcr.io/grid4earth/gridlook:latest
-│           requires authentication (403). Needs a GitHub PAT imagePullSecret.
 │
 ├── Namespace: s3proxy
 │   └── nginx-s3-gateway        — https://data.grid4earth.eu
@@ -310,16 +308,6 @@ controller.config.annotations-risk-level = Critical
 > **Note on ingress-nginx >= 1.12:** since chart version 4.12, `allowSnippetAnnotations: true`
 > alone is not sufficient — `annotations-risk-level: Critical` is also required, otherwise the
 > admission webhook rejects `configuration-snippet` annotations.
-
-The proxy replaces the previous `https://data-grid4earth.duckdns.org` endpoint.
-
-### Note on Zarr versions
-
-The proxy serves any file format correctly. However, Gridlook
-(https://gridlook.grid4earth.eu) currently only supports **Zarr v2**
-(metadata files: `.zmetadata`, `.zarray`, `.zattrs`, `.zgroup`).
-Datasets in **Zarr v3** format (`zarr.json`) will not display correctly in Gridlook
-until Gridlook is updated to support Zarr v3.
 
 ---
 
@@ -401,8 +389,6 @@ The following subdomains are deployed via `grid4earth-stac-stack.yaml`:
 - stac-fastapi-geoparquet → https://stac-api.grid4earth.eu
 - stac-browser → https://stac-browser.grid4earth.eu
 - gridlook → https://gridlook.grid4earth.eu
-
-> **Note:** gridlook is currently unavailable (image pull error, needs GitHub PAT imagePullSecret).
 
 ---
 
