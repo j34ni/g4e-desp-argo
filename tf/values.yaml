@@ -1,4 +1,7 @@
 hub:
+  config:
+    KubeSpawner:
+      start_timeout: 600
   extraConfig:
     00-add-dask-gateway-values: |
       import os
