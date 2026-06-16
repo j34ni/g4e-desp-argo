@@ -28,6 +28,66 @@ hub:
               break
       else:
           print("dask-gateway service not found, this should not happen!")
+    01-start-timeout: |
+      c.KubeSpawner.start_timeout = 600
+    02-profile-list: |
+      async def profile_list(spawner):
+          username = spawner.user.name
+          s2msi_users = ['pablo-richard', 'capetienne', 'cgueguen', 'j34ni', 'annefou', 'tinaok']
+
+          standard_profile = {
+              'display_name': '✅ Standard (CPU)',
+              'description': 'Standard CPU environment — 2 to 16 CPUs, 8 to 32 GB RAM',
+              'default': True,
+              'kubespawner_override': {
+                  'cpu_limit': 16,
+                  'cpu_guarantee': 2,
+                  'mem_limit': '32G',
+                  'mem_guarantee': '8G',
+                  'node_selector': {
+                      'hub.jupyter.org/node-purpose': 'user',
+                      'node-role': 'cpu'
+                  }
+              }
+          }
+
+          s2msi_profile = {
+              'display_name': '🛰️ Sentinel-2 MSI (s2msi)',
+              'description': 'Sentinel-2 MSI processor environment — 2 to 16 CPUs, up to 64 GB RAM',
+              'kubespawner_override': {
+                  'image': 'y74y55mn.gra7.container-registry.ovh.net/healpix-private/s2msi:test',
+                  'cpu_limit': 16,
+                  'cpu_guarantee': 2,
+                  'mem_limit': '64G',
+                  'mem_guarantee': '8G',
+                  'node_selector': {
+                      'hub.jupyter.org/node-purpose': 'user',
+                      'node-role': 'cpu'
+                  },
+                  'storage_home_mount_path': '/home/dask'
+              }
+          }
+
+          gpu_profile = {
+              'display_name': '⚠️  GPU (NVIDIA A10, not available yet)',
+              'description': '1x NVIDIA A10 GPU — for heavier processing and HEALPix regriding',
+              'kubespawner_override': {
+                  'cpu_limit': 16,
+                  'cpu_guarantee': 4,
+                  'mem_limit': '32G',
+                  'mem_guarantee': '16G',
+                  'node_selector': {'node-role': 'gpu'},
+                  'extra_resource_limits': {'nvidia.com/gpu': '1'},
+                  'tolerations': [{'key': 'nvidia.com/gpu', 'operator': 'Exists', 'effect': 'NoSchedule'}]
+              }
+          }
+
+          profiles = [standard_profile, gpu_profile]
+          if username in s2msi_users:
+              profiles.insert(1, s2msi_profile)
+          return profiles
+
+      c.KubeSpawner.profile_list = profile_list
   services:
     dask-gateway:
       display: false
@@ -44,48 +104,3 @@ singleuser:
         secretKeyRef:
           name: s3-credentials
           key: secretKey
-  profileList:
-    - display_name: "✅ Standard (CPU)"
-      description: "Standard CPU environment — 2 to 16 CPUs, 8 to 32 GB RAM"
-      default: true
-      kubespawner_override:
-        cpu_limit: 16
-        cpu_guarantee: 2
-        mem_limit: "32G"
-        mem_guarantee: "8G"
-        node_selector:
-          hub.jupyter.org/node-purpose: user
-          node-role: cpu
-    - display_name: "🛰️ Sentinel-2 MSI (s2msi)"
-      description: "Sentinel-2 MSI processor environment — 2 to 16 CPUs, up to 64 GB RAM"
-      allowed_users:
-        - pablo-richard
-        - capetienne
-        - cgueguen
-        - j34ni
-        - annefou    
-      kubespawner_override:
-        image: y74y55mn.gra7.container-registry.ovh.net/healpix-private/s2msi:test
-        cpu_limit: 16
-        cpu_guarantee: 2
-        mem_limit: "64G"
-        mem_guarantee: "8G"
-        node_selector:
-          hub.jupyter.org/node-purpose: user
-          node-role: cpu
-        storage_home_mount_path: /home/dask
-    - display_name: "⚠️  GPU (NVIDIA A10, not available yet)"
-      description: "1x NVIDIA A10 GPU — for heavier processing and HEALPix regriding"
-      kubespawner_override:
-        cpu_limit: 16
-        cpu_guarantee: 4
-        mem_limit: "32G"
-        mem_guarantee: "16G"
-        node_selector:
-          node-role: gpu
-        extra_resource_limits:
-          nvidia.com/gpu: "1"
-        tolerations:
-          - key: nvidia.com/gpu
-            operator: Exists
-            effect: NoSchedule
