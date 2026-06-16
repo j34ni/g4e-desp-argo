@@ -1,6 +1,6 @@
 # ============================================================
 # grid4earth STAC stack — Kubernetes manifests
-# Services: stac-fastapi-geoparquet, stac-browser, gridlook
+# Services: stac-fastapi-geoparquet, stac-browser
 # Cluster: OVH GRA9 (js7imo.c1.gra9.k8s.ovh.net)
 # ============================================================
 
@@ -15,21 +15,8 @@ metadata:
   name: stac
 
 ---
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: gridlook
-
----
 # ============================================================
 # STAC-FASTAPI-GEOPARQUET
-# ============================================================
-# NOTE: deployment is currently BLOCKED until Justus has
-# produced collections.json + GeoParquet files on S3.
-# The manifest is ready — just apply when files are in place.
-#
-# Public S3 base URL: https://grid4earth.s3.gra.io.cloud.ovh.net
-# GeoParquet files expected at: /public/sentinel-2-l2a/
 # ============================================================
 
 apiVersion: apps/v1
@@ -114,9 +101,9 @@ metadata:
     cert-manager.io/cluster-issuer: "letsencrypt-jupyterhub"
     nginx.ingress.kubernetes.io/proxy-body-size: "0"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
-    # CORS — allow stac-browser and gridlook to call this API
+    # CORS — allow stac-browser and gridlook (GitHub Pages) to call this API
     nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "https://stac-browser.grid4earth.eu,https://gridlook.grid4earth.eu"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://stac-browser.grid4earth.eu,https://grid4earth.github.io"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, OPTIONS"
     nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization"
 spec:
@@ -141,8 +128,9 @@ spec:
 # ============================================================
 # STAC-BROWSER
 # ============================================================
-# Radiant Earth STAC Browser — static React app
-# Configured to point at our stac-fastapi-geoparquet endpoint
+# Custom build of Radiant Earth STAC Browser with Gridlook plugin
+# Image: ghcr.io/j34ni/stac-browser:gridlook
+# Source: https://github.com/GRID4EARTH/stac-browser/tree/gridlook-asset-action
 # ============================================================
 
 apiVersion: apps/v1
@@ -219,92 +207,5 @@ spec:
             backend:
               service:
                 name: stac-browser
-                port:
-                  number: 80
-
----
-# ============================================================
-# GRIDLOOK
-# ============================================================
-# NOTE: Gridlook's exact Docker image and configuration
-# need to be confirmed. The manifest below uses a placeholder
-# image — update image: and env: once confirmed with Justus.
-# ============================================================
-
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: gridlook
-  namespace: gridlook
-  labels:
-    app: gridlook
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: gridlook
-  template:
-    metadata:
-      labels:
-        app: gridlook
-    spec:
-      containers:
-        - name: gridlook
-          # TODO: confirm correct image with Justus
-          image: ghcr.io/grid4earth/gridlook:latest
-          ports:
-            - containerPort: 8080
-          env:
-            # STAC API endpoint for Gridlook to query
-            - name: STAC_API_URL
-              value: "https://stac-api.grid4earth.eu"
-            # Public S3 base URL for asset access
-            - name: S3_PUBLIC_URL
-              value: "https://grid4earth.s3.gra.io.cloud.ovh.net"
-          resources:
-            requests:
-              memory: "128Mi"
-              cpu: "100m"
-            limits:
-              memory: "512Mi"
-              cpu: "500m"
-
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: gridlook
-  namespace: gridlook
-spec:
-  selector:
-    app: gridlook
-  ports:
-    - port: 80
-      targetPort: 8080
-
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: gridlook
-  namespace: gridlook
-  annotations:
-    cert-manager.io/cluster-issuer: "letsencrypt-jupyterhub"
-    nginx.ingress.kubernetes.io/proxy-body-size: "0"
-spec:
-  ingressClassName: nginx-jupyterhub
-  tls:
-    - hosts:
-        - gridlook.grid4earth.eu
-      secretName: gridlook-tls
-  rules:
-    - host: gridlook.grid4earth.eu
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: gridlook
                 port:
                   number: 80
