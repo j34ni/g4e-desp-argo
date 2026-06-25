@@ -34,6 +34,7 @@ hub:
       async def profile_list(spawner):
           username = spawner.user.name
           s2msi_users = ['pablo-richard', 'capetienne', 'cgueguen', 'j34ni', 'annefou', 'tinaok']
+          s3syn_users = ['j34ni', 'annefou']
 
           standard_profile = {
               'display_name': '✅ Standard (CPU)',
@@ -68,6 +69,23 @@ hub:
               }
           }
 
+          s3syn_profile = {
+              'display_name': '🔄 S3 Sync (s3syn)',
+              'description': 'S3 synchronisation environment — 2 to 16 CPUs, 8 to 32 GB RAM',
+              'kubespawner_override': {
+                  'image': 'y74y55mn.gra7.container-registry.ovh.net/healpix-private/s3syn:latest',
+                  'image_pull_policy': 'Always',
+                  'cpu_limit': 16,
+                  'cpu_guarantee': 2,
+                  'mem_limit': '32G',
+                  'mem_guarantee': '8G',
+                  'node_selector': {
+                      'hub.jupyter.org/node-purpose': 'user',
+                      'node-role': 'cpu'
+                  }
+              }
+          }
+
           gpu_profile = {
               'display_name': '⚠️  GPU (NVIDIA A10, not available yet)',
               'description': '1x NVIDIA A10 GPU — for heavier processing and HEALPix regriding',
@@ -85,6 +103,8 @@ hub:
           profiles = [standard_profile, gpu_profile]
           if username in s2msi_users:
               profiles.insert(1, s2msi_profile)
+          if username in s3syn_users:
+              profiles.insert(-1, s3syn_profile)
           return profiles
 
       c.KubeSpawner.profile_list = profile_list

@@ -1,8 +1,7 @@
 channels:
   - conda-forge
-
 dependencies:
   - numpy>=2.3
+  - shapely>=2.1.0
   - xarray>=2026.2
-  - xdggs
   - pip

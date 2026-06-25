@@ -72,6 +72,10 @@ resource "ovh_cloud_project_kube_nodepool" "cpu_pool" {
   max_nodes     = 5
   autoscale     = true
 
+  lifecycle {
+    ignore_changes = [desired_nodes]
+  }
+
   template {
     metadata {
       annotations = {}
@@ -97,6 +101,10 @@ resource "ovh_cloud_project_kube_nodepool" "dask_worker_pool" {
   min_nodes     = 1
   max_nodes     = 5
   autoscale     = true
+
+  lifecycle {
+    ignore_changes = [desired_nodes]
+  }
 
   template {
     metadata {
@@ -239,7 +247,7 @@ resource "helm_release" "jupyterhub" {
     name  = "ingress.annotations.cert-manager\\.io/cluster-issuer"
     value = "letsencrypt-jupyterhub"
   }
-set {
+  set {
     name  = "ingress.annotations.nginx\\.ingress\\.kubernetes\\.io/proxy-body-size"
     value = "0"
     type  = "string"
