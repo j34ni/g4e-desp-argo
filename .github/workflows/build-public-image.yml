@@ -10,7 +10,7 @@ on:
         description: 'Image tag (default: git SHA)'
         required: false
 env:
-  IMAGE: ghcr.io/eopf-dggs/g4e-notebook
+  IMAGE: ghcr.io/j34ni/g4e-notebook
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
