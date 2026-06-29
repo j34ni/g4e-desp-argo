@@ -242,7 +242,7 @@ OVHcloud project: GRID4EARTH (24b43ff90f3044c8923063b0fbb53f26)
 │   │   ├── Profile: Standard CPU (✅ operational) — up to 32 GB RAM
 │   │   ├── Profile: Sentinel-2 MSI (✅ operational) — up to 64 GB RAM
 │   │   │   allowed users: pablo-richard, capetienne, cgueguen, j34ni, annefou
-│   │   ├── Profile: S3 SYNERGY / s3syn (✅ operational) — up to 32 GB RAM
+│   │   ├── Profile: Sentinel-3 SYNERGY / s3syn (✅ operational) — up to 32 GB RAM
 │   │   │   allowed users: j34ni, annefou, tik65536, tinaok
 │   │   │   image: y74y55mn.gra7.container-registry.ovh.net/healpix-private/s3syn:latest
 │   │   │   base: quay.io/jupyter/minimal-notebook:2024-05-27

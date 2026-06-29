@@ -34,7 +34,7 @@ hub:
       async def profile_list(spawner):
           username = spawner.user.name
           s2msi_users = ['pablo-richard', 'capetienne', 'cgueguen', 'j34ni', 'annefou', 'tinaok']
-          s3syn_users = ['j34ni', 'annefou']
+          s3syn_users = ['j34ni', 'annefou', 'tinaok', 'tik65536']
 
           standard_profile = {
               'display_name': '✅ Standard (CPU)',
@@ -71,7 +71,7 @@ hub:
 
           s3syn_profile = {
               'display_name': '🔄 S3 Sync (s3syn)',
-              'description': 'S3 synchronisation environment — 2 to 16 CPUs, 8 to 32 GB RAM',
+              'description': 'Sentinel-3 SYNERGY processor environment — 2 to 16 CPUs, 8 to 32 GB RAM',
               'kubespawner_override': {
                   'image': 'y74y55mn.gra7.container-registry.ovh.net/healpix-private/s3syn:latest',
                   'image_pull_policy': 'Always',
