@@ -70,7 +70,7 @@ hub:
           }
 
           s3syn_profile = {
-              'display_name': '🔄 S3 Sync (s3syn)',
+              'display_name': '🔄 Sentinel-3 Synergy (s3syn)',
               'description': 'Sentinel-3 SYNERGY processor environment — 2 to 16 CPUs, 8 to 32 GB RAM',
               'kubespawner_override': {
                   'image': 'y74y55mn.gra7.container-registry.ovh.net/healpix-private/s3syn:latest',
