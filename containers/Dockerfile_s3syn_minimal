@@ -1,12 +1,23 @@
 FROM quay.io/jupyter/minimal-notebook:2024-05-27
+
 USER root
-COPY synergy-processor /opt/s3syn
+RUN apt-get update && apt-get upgrade -y && apt-get clean && rm -rf /var/lib/apt/lists/*
+USER ${NB_USER}
+
+COPY --chown=${NB_UID}:${NB_GID} synergy-processor /opt/s3syn
+
 RUN --mount=type=secret,id=gitlab_token,mode=0444 \
     PIP_EXTRA_INDEX_URL="\
-https://__token__:$(cat /run/secrets/gitlab_token)@gitlab.eopf.copernicus.eu/api/v4/projects/52/packages/pypi/simple \
-https://__token__:$(cat /run/secrets/gitlab_token)@gitlab.eopf.copernicus.eu/api/v4/projects/171/packages/pypi/simple \
+https://__token__:$(cat /run/secrets/gitlab_token)@gitlab.eopf.copernicus.eu/api/v4/projects/519/packages/pypi/simple \
 https://__token__:$(cat /run/secrets/gitlab_token)@gitlab.eopf.copernicus.eu/api/v4/projects/118/packages/pypi/simple \
 https://__token__:$(cat /run/secrets/gitlab_token)@gitlab.eopf.copernicus.eu/api/v4/projects/92/packages/pypi/simple \
+https://__token__:$(cat /run/secrets/gitlab_token)@gitlab.eopf.copernicus.eu/api/v4/projects/171/packages/pypi/simple \
+https://__token__:$(cat /run/secrets/gitlab_token)@gitlab.eopf.copernicus.eu/api/v4/projects/102/packages/pypi/simple \
+https://__token__:$(cat /run/secrets/gitlab_token)@gitlab.eopf.copernicus.eu/api/v4/projects/113/packages/pypi/simple \
+https://__token__:$(cat /run/secrets/gitlab_token)@gitlab.eopf.copernicus.eu/api/v4/projects/14/packages/pypi/simple \
+https://__token__:$(cat /run/secrets/gitlab_token)@gitlab.eopf.copernicus.eu/api/v4/projects/78/packages/pypi/simple \
+https://__token__:$(cat /run/secrets/gitlab_token)@gitlab.eopf.copernicus.eu/api/v4/projects/94/packages/pypi/simple \
+https://__token__:$(cat /run/secrets/gitlab_token)@gitlab.eopf.copernicus.eu/api/v4/projects/52/packages/pypi/simple \
 https://__token__:$(cat /run/secrets/gitlab_token)@gitlab.eopf.copernicus.eu/api/v4/projects/67/packages/pypi/simple" \
     pip install --no-cache-dir \
         "/opt/s3syn[cluster-plugin,notebook]" \
@@ -14,4 +25,5 @@ https://__token__:$(cat /run/secrets/gitlab_token)@gitlab.eopf.copernicus.eu/api
         dask[distributed] \
         matplotlib \
         ipywidgets
-USER ${NB_USER}
+
+WORKDIR /home/${NB_USER}

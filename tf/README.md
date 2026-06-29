@@ -242,6 +242,11 @@ OVHcloud project: GRID4EARTH (24b43ff90f3044c8923063b0fbb53f26)
 │   │   ├── Profile: Standard CPU (✅ operational) — up to 32 GB RAM
 │   │   ├── Profile: Sentinel-2 MSI (✅ operational) — up to 64 GB RAM
 │   │   │   allowed users: pablo-richard, capetienne, cgueguen, j34ni, annefou
+│   │   ├── Profile: S3 SYNERGY / s3syn (✅ operational) — up to 32 GB RAM
+│   │   │   allowed users: j34ni, annefou, tik65536, tinaok
+│   │   │   image: y74y55mn.gra7.container-registry.ovh.net/healpix-private/s3syn:latest
+│   │   │   base: quay.io/jupyter/minimal-notebook:2024-05-27
+│   │   │   s3syn version: 1.0.6
 │   │   └── Profile: GPU (⚠️  disabled — see GPU section below)
 │   ├── Dask Gateway 2025.4.0
 │   ├── NGINX Ingress (class: nginx-jupyterhub)
@@ -272,6 +277,59 @@ OVHcloud project: GRID4EARTH (24b43ff90f3044c8923063b0fbb53f26)
     ├── grid4earth              (public data via data.grid4earth.eu)
     └── <TBD>                   (Argo Workflows artifacts)
 ```
+
+---
+
+## JupyterHub profiles
+
+### s3syn profile
+
+The s3syn profile provides the Sentinel-3 SYNERGY Level-2 processor environment.
+
+**Image build** — built from source on a VM from the
+[synergy-processor](https://gitlab.eopf.copernicus.eu/S3/SYN/synergy-processor) repository,
+then pushed to Harbor:
+
+```bash
+# Clone
+git clone https://<user>:<token>@gitlab.eopf.copernicus.eu/S3/SYN/synergy-processor.git
+
+# Build (token needed for private EOPF package registries)
+docker build \
+  --build-arg GITLAB_TOKEN="<token>" \
+  -t s3syn-jupyter:latest \
+  -f Dockerfile_s3syn \
+  .
+
+# Push to Harbor
+docker tag s3syn-jupyter:latest \
+  y74y55mn.gra7.container-registry.ovh.net/healpix-private/s3syn:latest
+docker push y74y55mn.gra7.container-registry.ovh.net/healpix-private/s3syn:latest
+```
+
+**Private package registries** used during build (full list from the
+[s3syn installation manual](https://s3.pages.eopf.copernicus.eu/SYN/synergy-processor/main/sim.html)):
+
+| Project ID | Package |
+|---|---|
+| 519 | s3syn |
+| 118 | s3olci |
+| 92 | asgard-legacy |
+| 171 | asgard-legacy-drivers |
+| 102, 113, 14, 78, 94, 52, 67 | other EOPF dependencies |
+
+**Quick install check** in a notebook:
+
+```python
+import s3syn
+print(s3syn.__version__)  # should print 1.0.6
+
+from s3syn.sy1.computing.sy1_processor import Sy1Processor
+from s3syn.sy2aod.computing.aod_processing_unit import AODProcessing
+print("OK:", Sy1Processor, AODProcessing)
+```
+
+**Allowed users:** `j34ni`, `annefou`, `tik65536`, `tinaok`
 
 ---
 
