@@ -1,6 +1,6 @@
 # ============================================================
 # grid4earth STAC stack — Kubernetes manifests
-# Services: stac-fastapi-geoparquet, stac-browser
+# Services: stac-fastapi-geoparquet, stac-browser, gridlook-redirect
 # Cluster: OVH GRA9 (js7imo.c1.gra9.k8s.ovh.net)
 # ============================================================
 
@@ -207,5 +207,106 @@ spec:
             backend:
               service:
                 name: stac-browser
+                port:
+                  number: 80
+
+---
+# ============================================================
+# GRIDLOOK REDIRECT
+# ============================================================
+# Gridlook itself runs on GitHub Pages, not on this cluster.
+# This is a simple 301 redirect: gridlook.grid4earth.eu ->
+# grid4earth.github.io/gridlook
+# ============================================================
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gridlook-redirect-nginx-conf
+  namespace: stac
+data:
+  default.conf: |
+    server {
+      listen 8080;
+      location / {
+        return 301 https://grid4earth.github.io/gridlook$request_uri;
+      }
+    }
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gridlook-redirect
+  namespace: stac
+  labels:
+    app: gridlook-redirect
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gridlook-redirect
+  template:
+    metadata:
+      labels:
+        app: gridlook-redirect
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:alpine
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: conf
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: default.conf
+          resources:
+            requests:
+              memory: "16Mi"
+              cpu: "10m"
+            limits:
+              memory: "32Mi"
+              cpu: "50m"
+      volumes:
+        - name: conf
+          configMap:
+            name: gridlook-redirect-nginx-conf
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gridlook-redirect
+  namespace: stac
+spec:
+  selector:
+    app: gridlook-redirect
+  ports:
+    - port: 80
+      targetPort: 8080
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gridlook-redirect
+  namespace: stac
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-jupyterhub"
+spec:
+  ingressClassName: nginx-jupyterhub
+  tls:
+    - hosts:
+        - gridlook.grid4earth.eu
+      secretName: gridlook-redirect-tls
+  rules:
+    - host: gridlook.grid4earth.eu
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gridlook-redirect
                 port:
                   number: 80
