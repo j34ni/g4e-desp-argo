@@ -56,7 +56,7 @@ hub:
               'display_name': '🛰️ Sentinel-2 MSI (s2msi)',
               'description': 'Sentinel-2 MSI processor environment — 2 to 16 CPUs, up to 64 GB RAM',
               'kubespawner_override': {
-                  'image': 'y74y55mn.gra7.container-registry.ovh.net/healpix-private/s2msi:test',
+                  'image': 'y74y55mn.gra7.container-registry.ovh.net/healpix-private/s2msi:latest',
                   'cpu_limit': 16,
                   'cpu_guarantee': 2,
                   'mem_limit': '64G',

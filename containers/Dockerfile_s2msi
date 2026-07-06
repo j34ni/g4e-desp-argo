@@ -1,6 +1,7 @@
-FROM g4e-notebook:latest
+FROM ghcr.io/j34ni/g4e-notebook:latest
 USER root
 RUN --mount=type=secret,id=gitlab_token,mode=0444 \
     /srv/conda/envs/notebook/bin/pip install --no-cache-dir \
-        "git+https://oauth2:$(cat /run/secrets/gitlab_token)@gitlab.eopf.copernicus.eu/S2/msi/s2msi.git@1.2.0#egg=s2msi[cluster-plugin,notebook]"
+        "git+https://oauth2:$(cat /run/secrets/gitlab_token)@gitlab.eopf.copernicus.eu/S2/msi/s2msi.git@1.2.0#egg=s2msi[cluster-plugin,notebook]" \
+        argo-workflows
 USER ${NB_USER}
