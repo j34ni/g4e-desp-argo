@@ -233,7 +233,7 @@ resource "helm_release" "jupyterhub" {
   }
   set {
     name  = "hub.config.GitHubOAuthenticator.allowed_users"
-    value = "{allixender,annefou,benbovy,capetienne,cgueguen,j34ni,fpaulifr,keewis,kmch,luikiris,jmdelouis,pablo-richard,tik65536,tinaok,vinbv}"
+    value = "{allixender,annefou,benbovy,capetienne,cgueguen,j34ni,fpaulifr,keewis,kmch,luikiris,jmdelouis,pablo-richard,tik65536,tinaok,vinbv,Guilhem-FERRE}"
   }
   set {
     name  = "ingress.enabled"
