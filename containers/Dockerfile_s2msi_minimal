@@ -1,0 +1,19 @@
+FROM quay.io/jupyter/minimal-notebook:x86_64-python-3.13.12
+USER root
+RUN apt-get update && apt-get install --yes --no-install-recommends build-essential && apt-get clean && rm -rf /var/lib/apt/lists/*
+USER ${NB_USER}
+RUN --mount=type=secret,id=gitlab_token,mode=0444 \
+    PIP_EXTRA_INDEX_URL="https://download.pytorch.org/whl/cu126" \
+    pip install --no-cache-dir \
+        "numpy>=2.3" \
+        "shapely>=2.1.0" \
+        "xarray>=2026.2" \
+        torch \
+        "healpix-geo @ git+https://github.com/GRID4EARTH/healpix-geo.git@main#subdirectory=python/healpix-geo" \
+        "healpix-plot @ git+https://github.com/GRID4EARTH/healpix-plot.git" \
+        "healpix-resample @ git+https://github.com/GRID4EARTH/healpix-resample.git" \
+        xdggs \
+        "s2msi[cluster-plugin,notebook] @ git+https://oauth2:$(cat /run/secrets/gitlab_token)@gitlab.eopf.copernicus.eu/S2/msi/s2msi.git@main" \
+        argo-workflows
+RUN pip install --no-cache-dir "dask==2025.2.0" "distributed==2025.2.0"
+WORKDIR /home/${NB_USER}
